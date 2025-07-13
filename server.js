@@ -1,9 +1,9 @@
-// server.js (Fixed for Roproxy Lite)
+// server.js (Fixed and Cleaned)
 
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
-require("dotenv\config");
+require("dotenv").config(); // ✅ FIXED THIS LINE
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -28,7 +28,6 @@ app.use(async (req, res) => {
       data: req.body,
     });
 
-    // pass along headers if needed
     res.set("x-csrf-token", robloxRes.headers["x-csrf-token"] || "");
     res.status(robloxRes.status).send(robloxRes.data);
   } catch (error) {
