@@ -5,7 +5,6 @@ const axios = require("axios");
 
 const app = express();
 const port = process.env.PORT || 3000;
-
 const ROBLOSECURITY = process.env.ROBLOSECURITY;
 
 app.use(cors());
@@ -14,37 +13,35 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.all("*", async (req, res) => {
   try {
-    // 👇 check if the request needs to go to a different domain
     const targetHost = req.headers["x-roblox-host"] || "apis.roblox.com";
     const robloxURL = `https://${targetHost}${req.path}`;
 
-    // clone headers safely
+    // clone headers and delete things Roblox doesn't like
     const headers = {
+      ...req.headers,
       "Content-Type": "application/json",
-      "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`,
-      ...req.headers, // include any custom headers
+      "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`
     };
 
-    // remove x-roblox-host before forwarding (Roblox doesn't like unknown headers)
+    delete headers["host"];
     delete headers["x-roblox-host"];
 
-    // get CSRF if it's a write-type request
+    // get csrf if needed
     if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
-      try {
-        await axios.post("https://auth.roblox.com/v2/logout", {}, {
-          headers: {
-            Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
-          },
-        });
-      } catch (e) {
-        if (e.response?.headers["x-csrf-token"]) {
-          headers["x-csrf-token"] = e.response.headers["x-csrf-token"];
+      const csrfRes = await axios.post("https://auth.roblox.com/v2/logout", {}, {
+        headers: {
+          "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`
         }
+      }).catch(err => err.response);
+
+      const csrfToken = csrfRes?.headers?.["x-csrf-token"];
+      if (csrfToken) {
+        headers["x-csrf-token"] = csrfToken;
       }
     }
 
-    // send the actual request
-    const robloxRes = await axios({
+    // proxy the request
+    const response = await axios({
       url: robloxURL,
       method: req.method,
       headers,
@@ -52,18 +49,20 @@ app.all("*", async (req, res) => {
       params: req.query,
     });
 
-    // forward the response back to the client
-    res.status(robloxRes.status).json(robloxRes.data);
+    res.status(response.status).json(response.data);
   } catch (err) {
-    console.error("[Proxy Error]", err.response?.status, err.response?.data || err.message);
-    res.status(err.response?.status || 500).json({
+    const status = err.response?.status || 500;
+    const message = err.response?.data || err.message || "Unknown error";
+
+    console.error("[Proxy Error]", status, message);
+    res.status(status).json({
       error: true,
-      status: err.response?.status || 500,
-      message: err.response?.data || err.message,
+      status,
+      message,
     });
   }
 });
 
 app.listen(port, () => {
-  console.log(`roproxy-modded running on port ${port}`);
+  console.log(`🔥 roproxy-modded up on ${port}`);
 });
