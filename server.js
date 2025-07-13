@@ -1,55 +1,47 @@
+// server.js (Fixed for Roproxy Lite)
+
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const axios = require("axios");
+require("dotenv\config");
 
 const app = express();
 const port = process.env.PORT || 3000;
-const ROBLOSECURITY = process.env.ROBLOSECURITY;
-
-// hardcoded csrf token (valid)
-const csrfToken = "q9Ag3LLCCcw2";
+const token = process.env.ROBLOSECURITY;
 
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
 
-app.all("*", async (req, res) => {
+app.use(async (req, res) => {
+  const targetHost = req.headers["x-roblox-host"] || "apis.roblox.com";
+  const fullUrl = `https://${targetHost}${req.path}`;
+
   try {
-    const targetHost = req.headers["x-roblox-host"] || "apis.roblox.com";
-    const robloxURL = `https://${targetHost}${req.path}`;
-
-    const headers = {
-      "Content-Type": "application/json",
-      "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`,
-      "x-csrf-token": csrfToken,
-      "User-Agent": "Mozilla/5.0"
-    };
-
-    // clean incoming headers to avoid Roblox anger
-    delete req.headers["x-roblox-host"];
-    delete req.headers["host"];
-    delete req.headers["accept-encoding"];
-
-    const response = await axios({
-      url: robloxURL,
+    const robloxRes = await axios({
       method: req.method,
-      headers: headers,
+      url: fullUrl,
+      headers: {
+        Cookie: `.ROBLOSECURITY=${token}`,
+        "Content-Type": "application/json",
+        "x-csrf-token": req.headers["x-csrf-token"] || "",
+      },
       data: req.body,
-      params: req.query
     });
 
-    res.status(response.status).json(response.data);
-  } catch (err) {
-    console.error("[Proxy Error]", err?.response?.status || 500, err?.response?.data || err.message);
-    res.status(err?.response?.status || 500).json({
+    // pass along headers if needed
+    res.set("x-csrf-token", robloxRes.headers["x-csrf-token"] || "");
+    res.status(robloxRes.status).send(robloxRes.data);
+  } catch (error) {
+    const status = error.response?.status || 500;
+    const message = error.response?.data || error.message;
+    res.status(status).send({
       error: true,
-      status: err?.response?.status || 500,
-      message: err?.response?.data || err.message
+      status,
+      message,
     });
   }
 });
 
 app.listen(port, () => {
-  console.log(`✅ roproxy-modded running on port ${port}`);
+  console.log(`roproxy-lite running on port ${port}`);
 });
