@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -13,22 +12,26 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// universal proxy route
 app.all("*", async (req, res) => {
   try {
-    const robloxURL = `https://apis.roblox.com${req.path}`;
+    // 👇 check if the request needs to go to a different domain
+    const targetHost = req.headers["x-roblox-host"] || "apis.roblox.com";
+    const robloxURL = `https://${targetHost}${req.path}`;
 
+    // clone headers safely
     const headers = {
       "Content-Type": "application/json",
       "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`,
-      ...req.headers, // keep original headers
+      ...req.headers, // include any custom headers
     };
 
-    // optional: csrf handling
-    if (req.method === "POST" || req.method === "PATCH") {
-      // get a csrf token
+    // remove x-roblox-host before forwarding (Roblox doesn't like unknown headers)
+    delete headers["x-roblox-host"];
+
+    // get CSRF if it's a write-type request
+    if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
       try {
-        const csrf = await axios.post("https://auth.roblox.com/v2/logout", {}, {
+        await axios.post("https://auth.roblox.com/v2/logout", {}, {
           headers: {
             Cookie: `.ROBLOSECURITY=${ROBLOSECURITY}`,
           },
@@ -40,6 +43,7 @@ app.all("*", async (req, res) => {
       }
     }
 
+    // send the actual request
     const robloxRes = await axios({
       url: robloxURL,
       method: req.method,
@@ -48,6 +52,7 @@ app.all("*", async (req, res) => {
       params: req.query,
     });
 
+    // forward the response back to the client
     res.status(robloxRes.status).json(robloxRes.data);
   } catch (err) {
     console.error("[Proxy Error]", err.response?.status, err.response?.data || err.message);
@@ -60,5 +65,5 @@ app.all("*", async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`roproxy full started on port ${port}`);
+  console.log(`roproxy-modded running on port ${port}`);
 });
