@@ -25,6 +25,8 @@ this one actually supports:
 i am **NOT** responsible for you getting banned 💀  
 if you do something dumb like use your main account or spam this too hard, that's on **you**.
 
+i am **ABSOLUTELY NOT** responsible for the loss of your account in case you somehow leak your token, it's **YOUR** responsability, not mine.
+
 **use an alt. always.**  
 this proxy just forwards roblox api requests.  
 what you do with it is **your problem**, not mine.
