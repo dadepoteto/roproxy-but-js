@@ -7,6 +7,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 const ROBLOSECURITY = process.env.ROBLOSECURITY;
 
+// hardcoded csrf token (valid)
+const csrfToken = "q9Ag3LLCCcw2";
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -16,53 +19,37 @@ app.all("*", async (req, res) => {
     const targetHost = req.headers["x-roblox-host"] || "apis.roblox.com";
     const robloxURL = `https://${targetHost}${req.path}`;
 
-    // clone headers and delete things Roblox doesn't like
     const headers = {
-      ...req.headers,
       "Content-Type": "application/json",
-      "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`
+      "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`,
+      "x-csrf-token": csrfToken,
+      "User-Agent": "Mozilla/5.0"
     };
 
-    delete headers["host"];
-    delete headers["x-roblox-host"];
+    // clean incoming headers to avoid Roblox anger
+    delete req.headers["x-roblox-host"];
+    delete req.headers["host"];
+    delete req.headers["accept-encoding"];
 
-    // get csrf if needed
-    if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
-      const csrfRes = await axios.post("https://auth.roblox.com/v2/logout", {}, {
-        headers: {
-          "Cookie": `.ROBLOSECURITY=${ROBLOSECURITY}`
-        }
-      }).catch(err => err.response);
-
-      const csrfToken = csrfRes?.headers?.["x-csrf-token"];
-      if (csrfToken) {
-        headers["x-csrf-token"] = csrfToken;
-      }
-    }
-
-    // proxy the request
     const response = await axios({
       url: robloxURL,
       method: req.method,
-      headers,
+      headers: headers,
       data: req.body,
-      params: req.query,
+      params: req.query
     });
 
     res.status(response.status).json(response.data);
   } catch (err) {
-    const status = err.response?.status || 500;
-    const message = err.response?.data || err.message || "Unknown error";
-
-    console.error("[Proxy Error]", status, message);
-    res.status(status).json({
+    console.error("[Proxy Error]", err?.response?.status || 500, err?.response?.data || err.message);
+    res.status(err?.response?.status || 500).json({
       error: true,
-      status,
-      message,
+      status: err?.response?.status || 500,
+      message: err?.response?.data || err.message
     });
   }
 });
 
 app.listen(port, () => {
-  console.log(`🔥 roproxy-modded up on ${port}`);
+  console.log(`✅ roproxy-modded running on port ${port}`);
 });
